@@ -1,0 +1,28 @@
+# Ignore build artifacts and generated files
+/build/
+/dist/
+*.log
+*.tmp
+*.bak
+
+# Ignore dependency directories
+node_modules/
+vendor/
+
+# Ignore system-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore environment variables and sensitive information
+.env
+config.json # Or other sensitive config files not meant for version control
+
+# Ignore IDE-specific files and directories
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Ignore compiled Python files
+__pycache__/
+*.pyc
