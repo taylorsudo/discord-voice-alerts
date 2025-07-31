@@ -2,29 +2,31 @@ import discord
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-USER_A_ID = int(os.getenv("USER_A_ID"))
-USER_B_ID = int(os.getenv("USER_B_ID"))
+
+# Read tracked user IDs from environment variables
+TRACKED_USERS = [
+    int(os.getenv("USER_A_ID")),
+    int(os.getenv("USER_B_ID")),
+    int(os.getenv("USER_C_ID")),
+    int(os.getenv("USER_D_ID")),
+]
+
 ANNOUNCE_CHANNEL_ID = int(os.getenv("ANNOUNCE_CHANNEL_ID"))
 
-# Set up intents: members and voice_states are required to track voice channels
 intents = discord.Intents.default()
 intents.members = True
 intents.voice_states = True
+intents.guilds = True
 
 client = discord.Client(intents=intents)
 
-# Dictionary to keep track of voice channels per user
-user_voice_channels = {
-    USER_A_ID: None,
-    USER_B_ID: None,
-}
+# Track current voice channel per user (None if not connected)
+user_voice_channels = {user_id: None for user_id in TRACKED_USERS}
 
-# Flag to prevent repeated alerts while users stay in the same VC
-has_announced = False
+last_announced_channel_id = None  # To avoid duplicate alerts
 
 @client.event
 async def on_ready():
@@ -32,43 +34,43 @@ async def on_ready():
 
 @client.event
 async def on_voice_state_update(member, before, after):
-    global has_announced
+    global last_announced_channel_id
 
-    # We only care about our two tracked users
     if member.id not in user_voice_channels:
-        # Uncomment below to debug other users
-        # print(f"Ignoring user {member.name} ({member.id})")
+        # Not tracking this user
         return
 
-    # Update the voice channel of the user
+    # Update this user's voice channel info
     user_voice_channels[member.id] = after.channel
 
-    print(f"[DEBUG] {member.name} changed voice channel: {before.channel} -> {after.channel}")
+    # Build a dict: channel_id -> list of tracked users currently in that channel
+    channel_to_users = {}
+    for user_id, channel in user_voice_channels.items():
+        if channel is not None:
+            channel_to_users.setdefault(channel.id, []).append(user_id)
 
-    a_channel = user_voice_channels[USER_A_ID]
-    b_channel = user_voice_channels[USER_B_ID]
+    # Find any channel where 2 or more tracked users are present
+    alert_channel_id = None
+    for channel_id, users_in_channel in channel_to_users.items():
+        if len(users_in_channel) >= 2:
+            alert_channel_id = channel_id
+            break  # Only alert once per event for the first qualifying channel
 
-    print(f"[DEBUG] User A channel: {a_channel}")
-    print(f"[DEBUG] User B channel: {b_channel}")
+    if alert_channel_id is not None:
+        if alert_channel_id != last_announced_channel_id:
+            last_announced_channel_id = alert_channel_id
+            announce_channel = client.get_channel(ANNOUNCE_CHANNEL_ID)
+            if announce_channel is None:
+                print(f"Error: Cannot find announce channel with ID {ANNOUNCE_CHANNEL_ID}")
+                return
 
-    # Check if both users are in the same non-empty voice channel
-    if a_channel is not None and a_channel == b_channel:
-        if not has_announced:
-            has_announced = True
-            channel = client.get_channel(ANNOUNCE_CHANNEL_ID)
-            if channel:
-                await channel.send(
-                    f"👀 Heads up! <@{USER_A_ID}> and <@{USER_B_ID}> are now in the same voice channel: **{a_channel.name}**"
-                )
-                print("[DEBUG] Alert sent!")
-            else:
-                print(f"[ERROR] Could not find announce channel with ID {ANNOUNCE_CHANNEL_ID}")
-        else:
-            print("[DEBUG] Alert already sent, skipping duplicate.")
+            # Mention users in the shared channel
+            user_mentions = ' and '.join(f"<@{uid}>" for uid in channel_to_users[alert_channel_id])
+            channel_obj = client.get_channel(alert_channel_id)
+            channel_name = channel_obj.name if channel_obj else "a voice channel"
+            await announce_channel.send(f"👀 Heads up! {user_mentions} are now in the same voice channel: **{channel_name}**")
     else:
-        if has_announced:
-            print("[DEBUG] Users separated or left voice channels, resetting alert flag.")
-        has_announced = False
+        # No 2+ users in same channel, reset alert flag
+        last_announced_channel_id = None
 
-if __name__ == "__main__":
-    client.run(TOKEN)
+client.run(TOKEN)
