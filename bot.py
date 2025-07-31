@@ -68,7 +68,7 @@ async def on_voice_state_update(member, before, after):
             user_mentions = ' and '.join(f"<@{uid}>" for uid in channel_to_users[alert_channel_id])
             channel_obj = client.get_channel(alert_channel_id)
             channel_name = channel_obj.name if channel_obj else "a voice channel"
-            await announce_channel.send(f"👀 Heads up! {user_mentions} are now in the same voice channel: **{channel_name}**")
+            await announce_channel.send(f"🔔 Heads up @everyone! {user_mentions} are now in the same voice channel: **{channel_name}**")
     else:
         # No 2+ users in same channel, reset alert flag
         last_announced_channel_id = None
